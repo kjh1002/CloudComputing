@@ -1,6 +1,9 @@
 import socket
 import subprocess
 import time
+import threading
+import webbrowser
+from datetime import datetime
 
 def get_cpu_usage():
 	try:
@@ -73,8 +76,56 @@ def send_to_server(message, server_ip, server_port):
         except Exception as e:
                 print(f"Send Fail : {e}")
 
-def run_slave(server_ip, server_port, interval):
-        print(f"Slave Start - server: {server_ip}:{server_port}, interval: {interval}s\n")
+def execute_task(task_command):
+        """작업 명령을 실행"""
+        try:
+                if task_command == "OPEN_YOUTUBE":
+                        print("\n★ 작업 수신: YouTube 웹페이지 열기")
+                        webbrowser.open('https://www.youtube.com')
+                        print("✓ YouTube 페이지를 열었습니다.\n")
+                        return "SUCCESS"
+                else:
+                        print(f"알 수 없는 작업: {task_command}")
+                        return "UNKNOWN_TASK"
+        except Exception as e:
+                print(f"작업 실행 오류: {e}")
+                return "ERROR"
+
+def task_listener(port=9998):
+        """서버로부터 작업 명령을 받는 리스너"""
+        try:
+                task_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                task_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                task_socket.bind(('0.0.0.0', port))
+                task_socket.listen(1)
+                
+                print(f"Task Listener Start... Port : {port}\n")
+                
+                while True:
+                        try:
+                                client_socket, addr = task_socket.accept()
+                                task_command = client_socket.recv(1024).decode('utf-8')
+                                
+                                # 작업 실행
+                                result = execute_task(task_command)
+                                
+                                # 결과 전송
+                                client_socket.send(result.encode('utf-8'))
+                                client_socket.close()
+                                
+                        except Exception as e:
+                                print(f"Task Listener Error: {e}")
+        except Exception as e:
+                print(f"Task Listener 시작 실패: {e}")
+
+def run_slave(server_ip, server_port, interval, task_port=9998):
+        print(f"Slave Start - server: {server_ip}:{server_port}, interval: {interval}s")
+        
+        # 작업 리스너를 백그라운드 스레드로 시작
+        listener_thread = threading.Thread(target=task_listener, args=(task_port,), daemon=True)
+        listener_thread.start()
+        
+        print("리소스 모니터링 시작...\n")
 
         while True:
                 try:
@@ -87,11 +138,15 @@ def run_slave(server_ip, server_port, interval):
 
                         cpu, memory, network, storage = read_from_file()
 
-                        message = f"CPU: {cpu}, Memory: {memory}, Network: {network}, Storage: {storage}"
+                        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        message = f"[{current_time}] CPU: {cpu}, Memory: {memory}, Network: {network}, Storage: {storage}"
                         send_to_server(message, server_ip, server_port)
 
                         time.sleep(interval)
 
+                except KeyboardInterrupt:
+                        print("\n클라이언트 종료...")
+                        break
                 except Exception as e:
                         print(f"Error: {e}")
                         time.sleep(interval)
