@@ -92,28 +92,50 @@ def execute_task(task_command):
                         try:
                                 if system == "Linux":
                                         # Linux에서는 여러 방법 시도
-                                        # 1. xdg-open 시도 (가장 범용적)
-                                        result = subprocess.run(['xdg-open', url], 
-                                                              capture_output=True, 
-                                                              timeout=5)
-                                        if result.returncode == 0:
-                                                print(f"✓ xdg-open으로 YouTube 페이지를 열었습니다.\n")
-                                                return "SUCCESS"
+                                        # DISPLAY 환경변수 설정 (GUI가 있는 경우)
+                                        env = os.environ.copy()
+                                        if 'DISPLAY' not in env:
+                                                env['DISPLAY'] = ':0'  # 기본 디스플레이로 설정
                                         
-                                        # 2. 직접 브라우저 실행 시도
+                                        # 1. 직접 브라우저 실행 시도 (더 안정적)
                                         browsers = ['firefox', 'google-chrome', 'chromium-browser', 'chromium']
                                         for browser in browsers:
                                                 try:
-                                                        subprocess.Popen([browser, url], 
-                                                                       stdout=subprocess.DEVNULL, 
-                                                                       stderr=subprocess.DEVNULL)
-                                                        print(f"✓ {browser}로 YouTube 페이지를 열었습니다.\n")
+                                                        # 백그라운드로 실행하되 새 프로세스 그룹으로
+                                                        subprocess.Popen(
+                                                                [browser, url],
+                                                                stdout=subprocess.DEVNULL,
+                                                                stderr=subprocess.DEVNULL,
+                                                                env=env,
+                                                                start_new_session=True
+                                                        )
+                                                        print(f"✓ {browser}로 YouTube 페이지를 열었습니다.")
+                                                        print(f"  (DISPLAY={env.get('DISPLAY', 'not set')})\n")
                                                         return "SUCCESS"
                                                 except FileNotFoundError:
                                                         continue
+                                                except Exception as e:
+                                                        print(f"  {browser} 실행 실패: {e}")
+                                                        continue
+                                        
+                                        # 2. xdg-open 시도 (fallback)
+                                        try:
+                                                subprocess.Popen(
+                                                        ['xdg-open', url],
+                                                        stdout=subprocess.DEVNULL,
+                                                        stderr=subprocess.DEVNULL,
+                                                        env=env,
+                                                        start_new_session=True
+                                                )
+                                                print(f"✓ xdg-open으로 YouTube 페이지를 열었습니다.")
+                                                print(f"  (DISPLAY={env.get('DISPLAY', 'not set')})\n")
+                                                return "SUCCESS"
+                                        except Exception as e:
+                                                print(f"  xdg-open 실행 실패: {e}")
                                         
                                         print("⚠ 사용 가능한 브라우저를 찾을 수 없습니다.")
-                                        print("  firefox, google-chrome, chromium-browser 중 하나를 설치해주세요.\n")
+                                        print("  firefox, google-chrome, chromium-browser 중 하나를 설치해주세요.")
+                                        print(f"  현재 DISPLAY={env.get('DISPLAY', 'not set')}\n")
                                         return "NO_BROWSER"
                                 
                                 else:
