@@ -99,7 +99,7 @@ def run_slave(server_ip, server_port, interval):
 
 if __name__ == '__main__':
         import sys
-        server_ip = '172.31.128.194'
+        server_ip = '192.168.8.10'
         server_port = 9999
         interval = 10
         run_slave(server_ip, server_port, interval)
